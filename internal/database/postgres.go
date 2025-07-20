@@ -29,6 +29,7 @@ type User struct {
 	Name         string
 	Email        string
 	PasswordHash string
+	IsVerified   bool
 }
 
 type PostgresStore struct {
@@ -53,10 +54,8 @@ func (s *PostgresStore) CreateUser(name, email, password string) (string, error)
 	if err != nil {
 		return "", err
 	}
-
 	verificationToken := uuid.New().String()
 	expiresAt := time.Now().Add(24 * time.Hour)
-
 	_, err = s.Db.Exec(
 		"INSERT INTO users (name, email, password_hash, verification_token, verification_token_expires_at) VALUES ($1, $2, $3, $4, $5)",
 		name, email, string(hashedPassword), verificationToken, expiresAt,
@@ -64,7 +63,6 @@ func (s *PostgresStore) CreateUser(name, email, password string) (string, error)
 	if err != nil {
 		return "", err
 	}
-
 	return verificationToken, nil
 }
 
@@ -76,7 +74,6 @@ func (s *PostgresStore) VerifyUser(token string) error {
 	if err != nil {
 		return err
 	}
-
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return err
@@ -84,20 +81,18 @@ func (s *PostgresStore) VerifyUser(token string) error {
 	if rowsAffected == 0 {
 		return sql.ErrNoRows
 	}
-
 	return nil
 }
 
 func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 	var user User
-	err := s.Db.QueryRow("SELECT id, name, email, password_hash FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash)
+	err := s.Db.QueryRow("SELECT id, name, email, password_hash, is_verified FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsVerified)
 	if err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-// ... (sisa fungsi GetSongs, GetCategories, dll biarkan sama)
 func (s *PostgresStore) GetRecentlyPlayed() ([]Song, error) {
 	rows, err := s.Db.Query("SELECT id, title, artist, image_url, song_url FROM songs WHERE section = 'recently_played'")
 	if err != nil {

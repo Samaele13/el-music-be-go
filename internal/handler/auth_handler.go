@@ -64,13 +64,11 @@ func (h *AuthHandler) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Missing token", http.StatusBadRequest)
 		return
 	}
-
 	err := h.Store.VerifyUser(token)
 	if err != nil {
 		http.Error(w, "Invalid or expired token", http.StatusBadRequest)
 		return
 	}
-
 	fmt.Fprintf(w, "<h1>Email verified successfully!</h1><p>You can now close this window and log in to the El Music app.</p>")
 }
 
@@ -84,6 +82,11 @@ func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := h.Store.GetUserByEmail(req.Email)
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	if !user.IsVerified {
+		http.Error(w, "Please verify your email before logging in", http.StatusForbidden)
 		return
 	}
 
