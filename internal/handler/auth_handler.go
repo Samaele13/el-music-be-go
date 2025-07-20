@@ -3,6 +3,8 @@ package handler
 import (
 	"el-music-be/internal/database"
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -42,14 +44,34 @@ func (h *AuthHandler) HandleRegister(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	err := h.Store.CreateUser(req.Name, req.Email, req.Password)
+	token, err := h.Store.CreateUser(req.Name, req.Email, req.Password)
 	if err != nil {
 		http.Error(w, "Email already exists", http.StatusConflict)
 		return
 	}
+
+	verificationLink := fmt.Sprintf("http://localhost:8080/api/v1/auth/verify?token=%s", token)
+	log.Printf("SIMULATING EMAIL SEND: Verification link for %s is: %s\n", req.Email, verificationLink)
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(map[string]string{"message": "User created successfully"})
+	json.NewEncoder(w).Encode(map[string]string{"message": "Registration successful. Please check your email to verify your account."})
+}
+
+func (h *AuthHandler) HandleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if token == "" {
+		http.Error(w, "Missing token", http.StatusBadRequest)
+		return
+	}
+
+	err := h.Store.VerifyUser(token)
+	if err != nil {
+		http.Error(w, "Invalid or expired token", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Fprintf(w, "<h1>Email verified successfully!</h1><p>You can now close this window and log in to the El Music app.</p>")
 }
 
 func (h *AuthHandler) HandleLogin(w http.ResponseWriter, r *http.Request) {

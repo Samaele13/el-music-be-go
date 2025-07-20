@@ -38,6 +38,7 @@ func main() {
 	authRoutes := api.PathPrefix("/auth").Subrouter()
 	authRoutes.HandleFunc("/register", authHandler.HandleRegister).Methods("POST")
 	authRoutes.HandleFunc("/login", authHandler.HandleLogin).Methods("POST")
+	authRoutes.HandleFunc("/verify", authHandler.HandleVerifyEmail).Methods("GET")
 
 	protectedRoutes := api.PathPrefix("").Subrouter()
 	protectedRoutes.Use(middleware.JWTMiddleware)

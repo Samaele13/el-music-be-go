@@ -3,7 +3,9 @@ package database
 import (
 	"database/sql"
 	"log"
+	"time"
 
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -46,13 +48,44 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
-func (s *PostgresStore) CreateUser(name, email, password string) error {
+func (s *PostgresStore) CreateUser(name, email, password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	verificationToken := uuid.New().String()
+	expiresAt := time.Now().Add(24 * time.Hour)
+
+	_, err = s.Db.Exec(
+		"INSERT INTO users (name, email, password_hash, verification_token, verification_token_expires_at) VALUES ($1, $2, $3, $4, $5)",
+		name, email, string(hashedPassword), verificationToken, expiresAt,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return verificationToken, nil
+}
+
+func (s *PostgresStore) VerifyUser(token string) error {
+	res, err := s.Db.Exec(
+		"UPDATE users SET is_verified = true, verification_token = NULL, verification_token_expires_at = NULL WHERE verification_token = $1 AND verification_token_expires_at > NOW()",
+		token,
+	)
 	if err != nil {
 		return err
 	}
-	_, err = s.Db.Exec("INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3)", name, email, string(hashedPassword))
-	return err
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
 }
 
 func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
@@ -64,6 +97,7 @@ func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
+// ... (sisa fungsi GetSongs, GetCategories, dll biarkan sama)
 func (s *PostgresStore) GetRecentlyPlayed() ([]Song, error) {
 	rows, err := s.Db.Query("SELECT id, title, artist, image_url, song_url FROM songs WHERE section = 'recently_played'")
 	if err != nil {
