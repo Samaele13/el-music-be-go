@@ -20,7 +20,26 @@ func (h *SongHandler) HandleGetRecentlyPlayed(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Failed to fetch songs", http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(songs)
+}
+
+func (h *SongHandler) HandleGetMadeForYou(w http.ResponseWriter, r *http.Request) {
+	songs, err := h.Store.GetMadeForYou()
+	if err != nil {
+		http.Error(w, "Failed to fetch songs", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(songs)
+}
+
+func (h *SongHandler) HandleGetSearchCategories(w http.ResponseWriter, r *http.Request) {
+	categories, err := h.Store.GetSearchCategories()
+	if err != nil {
+		http.Error(w, "Failed to fetch categories", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categories)
 }
