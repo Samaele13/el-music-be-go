@@ -10,6 +10,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+type Playlist struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OwnerID string `json:"owner_id"`
+}
+
+// ... (Struct Song, Category, User biarkan sama)
 type Song struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -49,6 +56,38 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) GetUserPlaylists(userID string) ([]Playlist, error) {
+	rows, err := s.Db.Query("SELECT id, name, owner_id FROM playlists WHERE owner_id = $1", userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var playlists []Playlist
+	for rows.Next() {
+		var p Playlist
+		if err := rows.Scan(&p.ID, &p.Name, &p.OwnerID); err != nil {
+			return nil, err
+		}
+		playlists = append(playlists, p)
+	}
+	return playlists, nil
+}
+
+func (s *PostgresStore) CreatePlaylist(name, ownerID string) (*Playlist, error) {
+	var newPlaylist Playlist
+	err := s.Db.QueryRow(
+		"INSERT INTO playlists (name, owner_id) VALUES ($1, $2) RETURNING id, name, owner_id",
+		name, ownerID,
+	).Scan(&newPlaylist.ID, &newPlaylist.Name, &newPlaylist.OwnerID)
+
+	if err != nil {
+		return nil, err
+	}
+	return &newPlaylist, nil
+}
+
+// ... (sisa fungsi User, Song, Category biarkan sama)
 func (s *PostgresStore) CreateUser(name, email, password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -91,6 +130,43 @@ func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 		return nil, err
 	}
 	return &user, nil
+}
+
+func (s *PostgresStore) SetPasswordResetToken(email string) (string, error) {
+	token := uuid.New().String()
+	expiresAt := time.Now().Add(1 * time.Hour) // Token berlaku 1 jam
+	_, err := s.Db.Exec(
+		"UPDATE users SET reset_password_token = $1, reset_password_token_expires_at = $2 WHERE email = $3",
+		token, expiresAt, email,
+	)
+	if err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+func (s *PostgresStore) ResetPassword(token, newPassword string) error {
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	res, err := s.Db.Exec(
+		"UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_token_expires_at = NULL WHERE reset_password_token = $2 AND reset_password_token_expires_at > NOW()",
+		string(hashedPassword), token,
+	)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows // Token tidak valid atau kedaluwarsa
+	}
+	return nil
 }
 
 func (s *PostgresStore) GetRecentlyPlayed() ([]Song, error) {
