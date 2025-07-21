@@ -16,7 +16,13 @@ type Playlist struct {
 	OwnerID string `json:"owner_id"`
 }
 
-// ... (Struct Song, Category, User biarkan sama)
+type PlaylistDetail struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	OwnerID string `json:"owner_id"`
+	Songs   []Song `json:"songs"`
+}
+
 type Song struct {
 	ID       string `json:"id"`
 	Title    string `json:"title"`
@@ -56,13 +62,43 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) GetPlaylistByID(playlistID, userID string) (*PlaylistDetail, error) {
+	var p PlaylistDetail
+	err := s.Db.QueryRow("SELECT id, name, owner_id FROM playlists WHERE id = $1 AND owner_id = $2", playlistID, userID).Scan(&p.ID, &p.Name, &p.OwnerID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := s.Db.Query(`
+		SELECT s.id, s.title, s.artist, s.image_url, s.song_url
+		FROM songs s
+		INNER JOIN playlist_songs ps ON s.id = ps.song_id
+		WHERE ps.playlist_id = $1
+		ORDER BY ps.added_at`, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	songs := make([]Song, 0)
+	for rows.Next() {
+		var song Song
+		if err := rows.Scan(&song.ID, &song.Title, &song.Artist, &song.ImageURL, &song.SongURL); err != nil {
+			return nil, err
+		}
+		songs = append(songs, song)
+	}
+	p.Songs = songs
+
+	return &p, nil
+}
+
 func (s *PostgresStore) GetUserPlaylists(userID string) ([]Playlist, error) {
 	rows, err := s.Db.Query("SELECT id, name, owner_id FROM playlists WHERE owner_id = $1", userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var playlists []Playlist
 	for rows.Next() {
 		var p Playlist
@@ -80,14 +116,12 @@ func (s *PostgresStore) CreatePlaylist(name, ownerID string) (*Playlist, error) 
 		"INSERT INTO playlists (name, owner_id) VALUES ($1, $2) RETURNING id, name, owner_id",
 		name, ownerID,
 	).Scan(&newPlaylist.ID, &newPlaylist.Name, &newPlaylist.OwnerID)
-
 	if err != nil {
 		return nil, err
 	}
 	return &newPlaylist, nil
 }
 
-// ... (sisa fungsi User, Song, Category biarkan sama)
 func (s *PostgresStore) CreateUser(name, email, password string) (string, error) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
@@ -134,7 +168,7 @@ func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 
 func (s *PostgresStore) SetPasswordResetToken(email string) (string, error) {
 	token := uuid.New().String()
-	expiresAt := time.Now().Add(1 * time.Hour) // Token berlaku 1 jam
+	expiresAt := time.Now().Add(1 * time.Hour)
 	_, err := s.Db.Exec(
 		"UPDATE users SET reset_password_token = $1, reset_password_token_expires_at = $2 WHERE email = $3",
 		token, expiresAt, email,
@@ -150,7 +184,6 @@ func (s *PostgresStore) ResetPassword(token, newPassword string) error {
 	if err != nil {
 		return err
 	}
-
 	res, err := s.Db.Exec(
 		"UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_password_token_expires_at = NULL WHERE reset_password_token = $2 AND reset_password_token_expires_at > NOW()",
 		string(hashedPassword), token,
@@ -158,13 +191,12 @@ func (s *PostgresStore) ResetPassword(token, newPassword string) error {
 	if err != nil {
 		return err
 	}
-
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return err
 	}
 	if rowsAffected == 0 {
-		return sql.ErrNoRows // Token tidak valid atau kedaluwarsa
+		return sql.ErrNoRows
 	}
 	return nil
 }
