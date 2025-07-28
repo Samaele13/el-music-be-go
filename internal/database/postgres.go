@@ -70,6 +70,18 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) GetUserByID(id string) (*User, error) {
+	var user User
+	err := s.Db.QueryRow(
+		"SELECT id, name, email, password_hash, is_verified, subscription_status, subscription_expires_at FROM users WHERE id = $1",
+		id,
+	).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsVerified, &user.SubscriptionStatus, &user.SubscriptionExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 	var user User
 	err := s.Db.QueryRow(
@@ -82,6 +94,7 @@ func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
 	return &user, nil
 }
 
+// ... (sisa fungsi biarkan sama)
 func (s *PostgresStore) GetLyricsForSong(songID string) ([]LyricLine, error) {
 	rows, err := s.Db.Query("SELECT timestamp, text FROM lyrics WHERE song_id = $1 ORDER BY line_order", songID)
 	if err != nil {

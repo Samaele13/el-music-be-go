@@ -34,6 +34,7 @@ func main() {
 	playlistHandler := handler.NewPlaylistHandler(store)
 	searchHandler := handler.NewSearchHandler(store)
 	lyricsHandler := handler.NewLyricsHandler(store)
+	paymentHandler := handler.NewPaymentHandler(store)
 
 	r := mux.NewRouter()
 	api := r.PathPrefix("/api/v1").Subrouter()
@@ -57,6 +58,7 @@ func main() {
 	protectedRoutes.HandleFunc("/playlists/{playlistId}/songs/{songId}", playlistHandler.HandleRemoveSongFromPlaylist).Methods("DELETE")
 	protectedRoutes.HandleFunc("/search", searchHandler.HandleSearchSongs).Methods("GET")
 	protectedRoutes.HandleFunc("/lyrics/{songId}", lyricsHandler.HandleGetLyrics).Methods("GET")
+	protectedRoutes.HandleFunc("/payments/charge", paymentHandler.HandleCreateTransaction).Methods("POST")
 
 	handler := corsMiddleware(r)
 

@@ -41,7 +41,7 @@ func JWTMiddleware(store *database.PostgresStore) func(http.Handler) http.Handle
 				return
 			}
 
-			user, err := store.GetUserByEmail(claims.Subject)
+			user, err := store.GetUserByID(claims.UserID)
 			if err != nil {
 				http.Error(w, "User not found", http.StatusUnauthorized)
 				return
