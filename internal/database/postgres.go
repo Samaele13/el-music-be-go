@@ -2,6 +2,7 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"log"
 	"time"
 
@@ -62,13 +63,51 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) RemoveSongFromPlaylist(playlistID, songID, userID string) error {
+	var ownerID string
+	err := s.Db.QueryRow("SELECT owner_id FROM playlists WHERE id = $1", playlistID).Scan(&ownerID)
+	if err != nil {
+		return err
+	}
+	if ownerID != userID {
+		return errors.New("user does not own this playlist")
+	}
+
+	res, err := s.Db.Exec("DELETE FROM playlist_songs WHERE playlist_id = $1 AND song_id = $2", playlistID, songID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if rowsAffected == 0 {
+		return errors.New("song not found in playlist")
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) AddSongToPlaylist(playlistID, songID, userID string) error {
+	var ownerID string
+	err := s.Db.QueryRow("SELECT owner_id FROM playlists WHERE id = $1", playlistID).Scan(&ownerID)
+	if err != nil {
+		return err
+	}
+	if ownerID != userID {
+		return errors.New("user does not own this playlist")
+	}
+	_, err = s.Db.Exec("INSERT INTO playlist_songs (playlist_id, song_id) VALUES ($1, $2)", playlistID, songID)
+	return err
+}
+
 func (s *PostgresStore) GetPlaylistByID(playlistID, userID string) (*PlaylistDetail, error) {
 	var p PlaylistDetail
 	err := s.Db.QueryRow("SELECT id, name, owner_id FROM playlists WHERE id = $1 AND owner_id = $2", playlistID, userID).Scan(&p.ID, &p.Name, &p.OwnerID)
 	if err != nil {
 		return nil, err
 	}
-
 	rows, err := s.Db.Query(`
 		SELECT s.id, s.title, s.artist, s.image_url, s.song_url
 		FROM songs s
@@ -79,7 +118,6 @@ func (s *PostgresStore) GetPlaylistByID(playlistID, userID string) (*PlaylistDet
 		return nil, err
 	}
 	defer rows.Close()
-
 	songs := make([]Song, 0)
 	for rows.Next() {
 		var song Song
@@ -89,7 +127,6 @@ func (s *PostgresStore) GetPlaylistByID(playlistID, userID string) (*PlaylistDet
 		songs = append(songs, song)
 	}
 	p.Songs = songs
-
 	return &p, nil
 }
 

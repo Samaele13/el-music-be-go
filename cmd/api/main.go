@@ -13,7 +13,7 @@ import (
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -51,6 +51,8 @@ func main() {
 	protectedRoutes.HandleFunc("/playlists", playlistHandler.HandleGetUserPlaylists).Methods("GET")
 	protectedRoutes.HandleFunc("/playlists", playlistHandler.HandleCreatePlaylist).Methods("POST")
 	protectedRoutes.HandleFunc("/playlists/{id}", playlistHandler.HandleGetPlaylistByID).Methods("GET")
+	protectedRoutes.HandleFunc("/playlists/{id}/songs", playlistHandler.HandleAddSongToPlaylist).Methods("POST")
+	protectedRoutes.HandleFunc("/playlists/{playlistId}/songs/{songId}", playlistHandler.HandleRemoveSongFromPlaylist).Methods("DELETE")
 
 	handler := corsMiddleware(r)
 
