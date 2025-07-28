@@ -46,7 +46,7 @@ func main() {
 	authRoutes.HandleFunc("/reset-password", authHandler.HandleResetPassword).Methods("POST")
 
 	protectedRoutes := api.PathPrefix("").Subrouter()
-	protectedRoutes.Use(middleware.JWTMiddleware)
+	protectedRoutes.Use(middleware.JWTMiddleware(store))
 	protectedRoutes.HandleFunc("/songs/recently-played", songHandler.HandleGetRecentlyPlayed).Methods("GET")
 	protectedRoutes.HandleFunc("/songs/made-for-you", songHandler.HandleGetMadeForYou).Methods("GET")
 	protectedRoutes.HandleFunc("/categories/search", songHandler.HandleGetSearchCategories).Methods("GET")
