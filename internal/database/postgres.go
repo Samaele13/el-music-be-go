@@ -11,6 +11,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// ... (Structs biarkan sama)
 type Playlist struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -63,6 +64,31 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) SearchSongs(query string) ([]Song, error) {
+	searchQuery := "%" + query + "%"
+	rows, err := s.Db.Query(`
+		SELECT id, title, artist, image_url, song_url
+		FROM songs
+		WHERE title ILIKE $1 OR artist ILIKE $1`,
+		searchQuery,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	songs := make([]Song, 0)
+	for rows.Next() {
+		var song Song
+		if err := rows.Scan(&song.ID, &song.Title, &song.Artist, &song.ImageURL, &song.SongURL); err != nil {
+			return nil, err
+		}
+		songs = append(songs, song)
+	}
+	return songs, nil
+}
+
+// ... (sisa fungsi biarkan sama)
 func (s *PostgresStore) RemoveSongFromPlaylist(playlistID, songID, userID string) error {
 	var ownerID string
 	err := s.Db.QueryRow("SELECT owner_id FROM playlists WHERE id = $1", playlistID).Scan(&ownerID)
@@ -72,12 +98,10 @@ func (s *PostgresStore) RemoveSongFromPlaylist(playlistID, songID, userID string
 	if ownerID != userID {
 		return errors.New("user does not own this playlist")
 	}
-
 	res, err := s.Db.Exec("DELETE FROM playlist_songs WHERE playlist_id = $1 AND song_id = $2", playlistID, songID)
 	if err != nil {
 		return err
 	}
-
 	rowsAffected, err := res.RowsAffected()
 	if err != nil {
 		return err
@@ -85,7 +109,6 @@ func (s *PostgresStore) RemoveSongFromPlaylist(playlistID, songID, userID string
 	if rowsAffected == 0 {
 		return errors.New("song not found in playlist")
 	}
-
 	return nil
 }
 
