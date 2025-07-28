@@ -11,7 +11,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// ... (Structs biarkan sama)
+type LyricLine struct {
+	Timestamp string `json:"timestamp"`
+	Text      string `json:"text"`
+}
+
 type Playlist struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
@@ -40,11 +44,13 @@ type Category struct {
 }
 
 type User struct {
-	ID           string
-	Name         string
-	Email        string
-	PasswordHash string
-	IsVerified   bool
+	ID                     string
+	Name                   string
+	Email                  string
+	PasswordHash           string
+	IsVerified             bool
+	SubscriptionStatus     string
+	SubscriptionExpiresAt  sql.NullTime
 }
 
 type PostgresStore struct {
@@ -64,6 +70,35 @@ func NewPostgresStore() (*PostgresStore, error) {
 	return &PostgresStore{Db: db}, nil
 }
 
+func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
+	var user User
+	err := s.Db.QueryRow(
+		"SELECT id, name, email, password_hash, is_verified, subscription_status, subscription_expires_at FROM users WHERE email = $1",
+		email,
+	).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsVerified, &user.SubscriptionStatus, &user.SubscriptionExpiresAt)
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (s *PostgresStore) GetLyricsForSong(songID string) ([]LyricLine, error) {
+	rows, err := s.Db.Query("SELECT timestamp, text FROM lyrics WHERE song_id = $1 ORDER BY line_order", songID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	lyrics := make([]LyricLine, 0)
+	for rows.Next() {
+		var line LyricLine
+		if err := rows.Scan(&line.Timestamp, &line.Text); err != nil {
+			return nil, err
+		}
+		lyrics = append(lyrics, line)
+	}
+	return lyrics, nil
+}
+
 func (s *PostgresStore) SearchSongs(query string) ([]Song, error) {
 	searchQuery := "%" + query + "%"
 	rows, err := s.Db.Query(`
@@ -76,7 +111,6 @@ func (s *PostgresStore) SearchSongs(query string) ([]Song, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	songs := make([]Song, 0)
 	for rows.Next() {
 		var song Song
@@ -88,7 +122,6 @@ func (s *PostgresStore) SearchSongs(query string) ([]Song, error) {
 	return songs, nil
 }
 
-// ... (sisa fungsi biarkan sama)
 func (s *PostgresStore) RemoveSongFromPlaylist(playlistID, songID, userID string) error {
 	var ownerID string
 	err := s.Db.QueryRow("SELECT owner_id FROM playlists WHERE id = $1", playlistID).Scan(&ownerID)
@@ -215,15 +248,6 @@ func (s *PostgresStore) VerifyUser(token string) error {
 		return sql.ErrNoRows
 	}
 	return nil
-}
-
-func (s *PostgresStore) GetUserByEmail(email string) (*User, error) {
-	var user User
-	err := s.Db.QueryRow("SELECT id, name, email, password_hash, is_verified FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Email, &user.PasswordHash, &user.IsVerified)
-	if err != nil {
-		return nil, err
-	}
-	return &user, nil
 }
 
 func (s *PostgresStore) SetPasswordResetToken(email string) (string, error) {
